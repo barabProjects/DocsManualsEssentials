@@ -1,0 +1,952 @@
+# Install the repository RPM:
+sudo dnf install -y https://download.postgresql.org/pub/repos/yum/reporpms/EL-8-x86_64/pgdg-redhat-repo-latest.noarch.rpm
+
+# Disable the built-in PostgreSQL module:
+sudo dnf -qy module disable postgresql
+
+# Install PostgreSQL:
+sudo dnf install -y postgresql14-server
+
+# Optionally initialize the database and enable automatic start:
+sudo /usr/pgsql-14/bin/postgresql-14-setup initdb
+sudo systemctl enable postgresql-14
+sudo systemctl start postgresql-14
+
+#Вход с правами пользователя postgres
+sudo -i -u postgres
+#Вход через утилиту psql
+psql
+#Смена пароля:
+alter user postgres with password 'password';
+# на экране вывод: ALTER ROLE
+#Выход
+quit
+
+#Файлы конфигурации postgres в каталоге
+cd /var/lib/pgsql/14/data
+
+# Выключить файрволл
+systemctl stop firewalld
+
+#Дополнительные утилиты для postgres
+yum search postgres | grep contrib
+#Дополнительные утилиты для postgres
+yum install postgresql14-contrib.x86_64
+
+#Отображение информации по ролям в СУБД
+select * from pg_catalog.pg_authid
+
+#установка утилит LDAP:
+sudo apt-get install ldap-utils -y
+#Ссылка по настройке LDAP аутентификации:
+https://www.strongdm.com/blog/connecting-postgres-to-active-directory-for-authentication
+
+192.168.115.133
+
+#grant select on all tables to "Petrov"
+grant select on all tables in schema to "Petrov"
+
+#Забираем права к таблице
+REVOKE ALL ON TABLE public.employees FROM group01;
+
+# Смотрим пользователей
+select * from pg_stat_activity
+#убиваем сессию по pid пользователя
+select pg_terminate_backend(pid_пользователя) 
+#Смотрим гранты для пользователя
+select  * from information_schema.role_table_grants where grantee='Petrov';
+
+#Как добавить строку в таблицу
+INSERT INTO products VALUES (1, 'Cheese', 9.99);
+# Удалить строку
+delete from table1 where id = 1;
+
+#Как изменить значение в строке таблицы
+UPDATE products SET price = 10 WHERE price = 5;
+
+select * from employees
+UPDATE employees SET last_name = 'Ivanova' WHERE employee_id = 107;
+
+
+Задача по грантованию прав:
+1)Создать пользователя "Ivanov", привязать к группе "group01"
+2)Дать дефалтовые привелегии на SELECT к БД "hr" для "group01" (ПКМ на БД -> properties -> Default Privileges)
+3)Дать дефалтовые привелегии на USAGE к схеме "public" для "group01 (ПКМ на схеме -> properties -> Security)
+4)Грантовать права SELECT ко всем БД.схемы hr.public (ПКМ на схеме -> properties -> Default privilegies
+													  или ПКМ на Tables -> Grand Wizard)
+5) Убрать (REVOKE) права SELECT к БД employees (ПКМ на таблице employees -> properties -> Security)
+
+SHOW search_path;
+SET search_path TO myschema,public;
+SET search_path TO myschema;
+SET search_path TO public;
+
+backup:
+1) Бэкап после остановки БД
+tar -cf backup.tar /usr/local/pgsql/data
+2) Выгрузка информации в текстовые файлы утилитами ( папка в Windows PostgreSQL/bin ):
+pg_dump
+pg_dumpall
+Пример:
+pg_dumpall -h 192.168.115.133 -U postgres -f /var/dumps/dump_centos.txt -v --column-inserts
+
+Не годится для восстановления (Наверно нужно через утилиту psql)
+pg_restore -d hr -h 192.168.115.133 -U postgres -v -c -t employees /var/dumps/dump_centos.txt
+
+
+
+3) через запрос COPY
+https://www.postgresqltutorial.com/export-postgresql-table-to-csv-file/
+
+COPY persons TO 'C:\tmp\persons_db.csv' DELIMITER ',' CSV HEADER;
+
+COPY persons TO 'C:\tmp\persons_db.csv' DELIMITER ',' CSV HEADER;
+
+
+4) WAL Archiving 
+
+В postgresql.conf прописываем:
+
+archive_mode = on
+archive_command = 'copy %p D:\\postgres_archive\\%f' #Для Windows
+archive_command = 'test ! -f /mnt/server/archivedir/%f && cp %p /mnt/server/archivedir/%f' #Для Linux
+archive_timeout = 60
+
+5) Basebackup в Linux ( требуется проводить каждую ночь):
+pg_basebackup -D /var/lib/pgsql/14/backups/basebackup -v
+
+Восстановление:
+Инструкция для восстановления бэкапа: https://www.postgresql.org/docs/14/continuous-archiving.html#BACKUP-PITR-RECOVERY
+Шаги восстановления:
+1.Выключить сервер:
+	systemctl stop postgresql-14
+2. Скопировать всю директорию /data в backups/basebackup_current Вручную, или командой pg_basebackup:
+	pg_basebackup -D /var/lib/pgsql/14/backups/basebackup_current -v
+3. Удалить всё из директории /data
+4. Скопировать в директорию /data бэкап из /basebackup
+5. Проверить директорию data/pg_wal. Если данные отличаются из скопированного в п.2, то почистить скопировать от туда в текущую 
+6. Почистить логи /data/log
+7.В postgresql.conf прописать
+	restore_command = 'cp /mnt/server/archivedir/%f %p'
+	recovery_target_time = '2021-11-24 12:44:03.000000+10'
+8. Создать в директории /data файл recovery.signal	
+9. Запуск postgres
+	systemctl start postgresql-14
+10. Смотрим логи в /data/log, если нужно выполнить
+	select pg_wal_replay_resume();
+
+В /pg_wal:
+	-файлы-метки *.history и *.backup  - это история по выполнению команды pg_basebackup
+	-файлы-метки в папке /archive_status - это история по архивации
+	
+#Время в формате postgreSQL для вставки в recovery_target_time:
+select current_timestamp
+
+
+cat postgresql.conf | egrep -v '^#|^$'
+
+Инструкция по установке pgAgent на Linux
+https://www.darrentuer.net/post/2020/11/25/installing-pgagent-on-centos
+
+
+echo 127.0.0.1:5432:*:pgagent:password >> ~/.pgpass
+
+CREATE USER "pgagent" WITH
+LOGIN
+NOSUPERUSER
+INHERIT
+NOCREATEDB
+NOCREATEROLE
+NOREPLICATION
+encrypted password 'password';
+GRANT USAGE ON SCHEMA pgagent TO pgagent;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA pgagent TO pgagent;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA pgagent TO pgagent;
+GRANT CONNECT ON DATABASE postgres TO pgagent;
+GRANT TEMP ON DATABASE postgres TO pgagent;
+
++Даём права на чтение и запись для pgagent
+
+Проверяем на сервере из под юзера postgres
+psql -h 127.0.0.1 -d postgres -U pgagent
+
+Настройки pgagent:
+/etc/pgagent/pgagent.conf
+
+systemctl edit pgagent_14.service
+/etc/systemd/system/pgagent_14.service.d/override.conf
+
+$ sudo systemctl daemon-reload
+$ sudo systemctl disable pgagent_14
+$ sudo systemctl enable pgagent_14
+$ sudo systemctl start pgagent_14
+
+В Windows ставится через Stack Builder и установится в:
+D:\PostgreSQL\bin\pgagent.exe
+
+
+создаём таблицу jobtest
+insert into jobtest (date_column) values (current_timestamp);
+
+создаём pgAgent Jobs
+В connection string:
+host=127.0.0.1 port=5432 dbname=hr user=postgres password=password
+В скрипте для выполнения:
+insert into jobtest (date_column) values (current_timestamp);
+
+
+Проверяем:
+select * from pgagent.pga_joblog;
+
+Не хватает чего то:
+sudo -i -u postgres
+/usr/bin/pgagent_14 -f -l 2 host=127.0.0.1 port=5432 user=pgagent dbname=postgres
+
+total processot time <= 80%
+Управление распараллеливанием CPU при работе postgres:
+set max_parallel_workers_rep_gather = 0 - отключение распараллеливания на одного пользователя
+set max_parallel_workers = 4 - общее количество процессов
+max_worker_processes
+и др.
+
+Память <= 90% должно быть занято
+В postgresql.conf
+Параметры смотрим командой:
+select * from pg_settings;
+По умолчанию: shared_buffers = 128 MB
+				temp_buffers = 8 MB
+				work_mem = 4MB
+				и др.
+Нужно менять
+
+Командой:
+select * from pg_stat_database;
+смотрим параметры blks_read - чтение с диска
+				и blks_hit - чтение из памяти
+				
+Важно отношение: blks_hit/(blks_hit + blks_read)*100
+В качестве отправной точки берём 25% от оперативной памяти.
+Если недостаточно, то подкручиваем параметр shared_buffers. (RAM/4)
+
+select datname, blks_hit/(blks_hit + blks_read)*100 as param from pg_stat_database
+where datname = 'hr';
+
+temp_buffers - память для временных таблице (это больше для 1c, там используются временные таблицы)
+work_mem - память на каждое открытое клиентское подключение (если тежёлые запросы идут - увеличиваем)
+max_stack_depth - для стека вызовов
+
+
+HDD
+
+yum -y install sysstat
+iostat
+iostat -d -t -p sda 1 2
+iostat -d -t -p sda -x
+
+iostat -xmt 1
+длина очереди не более 2 в среднем за приличное время (aqu-sz)
+
+
+Сеть: длина очереди не более 2
+ifconfig
+ethtool -g <interface>
+
+dnf install -y iproute-tc
+tc -s -d qdisc ls dev <interface>
+
+
+Системные вьюшки можно найти через pgAdmin:
+Databases -> postgres -> catalogs -> pg_catalog -> views
+
+В postgresql.conf
+superuser_reserved_connections - заререзвированное кол-во сессий для суперпользователя
+
+Полезные вьюшки
+select * from pg_stat_activity;
+select * from pg_stat_user_tables;
+select * from pg_stat_user_indexes;
+
+чем больше неиспользуемых индексов, тем медленнее работает БД
+Индексы ускоряют запросы на чтение, но замедляю доступ на запись
+
+Как заставить работать через индексы:
+set enable_seqscan = 'on' (или через postgresql.conf)
+
+pg_stat_archiver
+pg_stat_bgwriter
+pg_stat_database
+
+#Представления которые нужно отдельно прописывать в БД в Extentions и в postgresql.conf (параметр shared_preload_lobraries)
+select * from pg_stat_statements order by calls desc;  #прописывать в БД в Extentions и в postgresql.conf (параметр shared_preload_lobraries)
+select * from pgstattuple('epmloyees'); #прописывать в БД в Extentions
++ pg_stat самописные в github
+
+-------------
+Банчмарк:
+https://www.dba-ninja.com/2019/11/how-to-use-pgbench-for-postgresql-benchmark-testing.html
+
+#Create a test database
+CREATE DATABASE mydb
+Initialise the pgbench db – this will create the sample tables in the db
+
+Запуск тестов производительности:
+pgbench -U postgres -i -s 10  mydb #локально в БД postgres на Windows 
+/usr/pgsql-14/bin/pgbench -U postgres -p 5432 -i -s 5 mydb #локально в БД postgres на Linux
+pgbench -U postgres -h 192.168.115.133 -p 5432 -c 10 -j 2 -t 1000 mydb #через Windows на удалённую БД postgres на Linux 
+
+------------------
+
+Минусы pgbouncer (от разработчиков):
+http://www.pgbouncer.org/faq.html
+
+-------------------
+
+Анализируем индексы запросами:
+select * from pg_stat_user_tables;
+select * from pg_stat_user_indexes;
+select * from pg_stat_statements order by calls desc;
+
+
+Индексы бывают кластерные и некластерные.
+Где смотреть: ПКМ по индексу (в таблицы) -> prorerties -> Definition -> Clustered?
+
+
+#create table cust
+(cust_id bigint, first_name varchar(50), last_name varchar(50),
+ gender char(1), income numeric(10,2))
+
+#copy from postgresql
+#Windows
+COPY cust(cust_id, first_name, last_name,gender, income)
+FROM 'D:\PG14\DimCustomer.csv'
+DELIMITER E'\t';
+#Linux
+COPY cust(cust_id, first_name, last_name,gender, income)
+FROM '/var/lib/pgsql/DimCustomer.csv'
+DELIMITER E'\t';
+# проверяем
+select * from cust;
+
+#postgres explain
+explain select * from cust where cust_id = 11002;
+
+#Ответ:
+#Seq Scan on cust  (cost=0.00..321.84 rows=18484 width=27)
+
+explain (analyze, settings, timing, verbose) select * from cust where cust_id = 11002;
+
+explain (analyze, verbose, costs) 
+select first_name, last_name, department_name from
+employees join departments on employees.department_id = departments.department_id;
+
+explain (analyze, verbose, costs, SETTINGS, buffers, wal, timing) 
+select first_name, last_name, department_name from
+employees join departments on employees.department_id = departments.department_id;
+
+----------
+
+Типы индексов:
+1. btree - balance tree
+2. hash - реагирует только на знак =
+3. gist - для взаимодействия с postgis (картография)
+4. gin - в один столбец идёт множество значений (массивы, json, xml)
+5. brin - блочные индексы (есть блоки с одинаковыми данными)
+
+Средство автоматической оптимизации индексов (нестандантное):
+https://www.percona.com/blog/2019/07/22/automatic-index-recommendations-in-postgresql-using-pg_qualstats-and-hypopg/
+
+------------------------------
+------------------------------
+Пример настройки партиционирования и шардирования:
+https://www.percona.com/blog/2019/05/24/an-overview-of-sharding-in-postgresql-and-how-it-relates-to-mongodbs/
+
+
+Партиционирование с использованием наследования таблиц (неоптимально)
+Using table inheritance
+
+CREATE TABLE temperature (
+  id BIGSERIAL PRIMARY KEY NOT NULL,
+  city_id INT NOT NULL,
+  timestamp TIMESTAMP NOT NULL,
+  temp DECIMAL(5,2) NOT NULL
+);
+
+CREATE TABLE temperature_201901 (CHECK (timestamp >= DATE '2019-01-01' AND timestamp <= DATE '2019-01-31')) INHERITS (temperature);
+CREATE TABLE temperature_201902 (CHECK (timestamp >= DATE '2019-02-01' AND timestamp <= DATE '2019-02-28')) INHERITS (temperature);
+CREATE TABLE temperature_201903 (CHECK (timestamp >= DATE '2019-03-01' AND timestamp <= DATE '2019-03-31')) INHERITS (temperature);
+
+
+CREATE OR REPLACE FUNCTION temperature_insert_trigger()
+RETURNS TRIGGER AS $$
+BEGIN
+    IF ( NEW.timestamp >= DATE '2019-01-01' AND NEW.timestamp <= DATE '2019-01-31' ) THEN INSERT INTO temperature_201901 VALUES (NEW.*);
+    ELSIF ( NEW.timestamp >= DATE '2019-02-01' AND NEW.timestamp <= DATE '2019-02-28' ) THEN INSERT INTO temperature_201902 VALUES (NEW.*);
+    ELSIF ( NEW.timestamp >= DATE '2019-03-01' AND NEW.timestamp <= DATE '2019-03-31' ) THEN INSERT INTO temperature_201903 VALUES (NEW.*);
+    ELSE RAISE EXCEPTION 'Date out of range!';
+    END IF;
+    RETURN NULL;
+END;
+$$
+LANGUAGE plpgsql;
+
+CREATE TRIGGER insert_temperature_trigger
+    BEFORE INSERT ON temperature
+    FOR EACH ROW EXECUTE PROCEDURE temperature_insert_trigger();
+	
+	
+select current_timestamp;
+
+Insert INTO public.temperature(
+	city_id, "timestamp", temp)
+	values (1, '2019-02-25 07:19:15.23456+10', -20);
+	
+-----------------------
+
+Создание таблиц с секционированием partitioning (оптипальный вариант)
+	
+CREATE TABLE temperature (
+  id BIGSERIAL NOT NULL,
+  city_id INT NOT NULL,
+  timestamp TIMESTAMP NOT NULL,
+  temp DECIMAL(5,2) NOT NULL
+) PARTITION BY RANGE (timestamp);
+
+CREATE TABLE temperature_201901 PARTITION OF temperature FOR VALUES FROM ('2019-01-01') TO ('2019-02-01');
+CREATE TABLE temperature_201902 PARTITION OF temperature FOR VALUES FROM ('2019-02-01') TO ('2019-03-01');
+CREATE TABLE temperature_201903 PARTITION OF temperature FOR VALUES FROM ('2019-03-01') TO ('2019-04-01');
+
+Insert INTO public.temperature(
+	city_id, "timestamp", temp)
+	values (1, '2019-02-25 07:19:15.23456+10', -20);	
+
+----------------------
+Инструкция для настройки FWD (Foreign Data Wrappers):
+https://www.percona.com/blog/2018/08/21/foreign-data-wrappers-postgresql-postgres_fdw/
+
+Начинаем с шага 6, шаг 8 и далее (остальное настроено):
+
+1. Регистрируем внешний источник данных:
+	# Создаём postgres_fdw
+	create extension postgres_fdw;
+	# Регистрируем сервер с БД:
+	CREATE SERVER hr FOREIGN DATA WRAPPER postgres_fdw OPTIONS (dbname 'postgres', host 'hr', port '5432');
+	# И USER MAPPING (логин и пароль):
+	CREATE USER MAPPING for app_user SERVER hr OPTIONS (user 'postgres', password 'password');
+
+2. Создаём FOREIGN TABLE
+
+CREATE FOREIGN TABLE departments
+(department_id int, department_name character varying(30),
+ manager_id int, location_id int)
+SERVER fdw_centos
+OPTIONS (schema_name 'public', table_name 'departments');
+
+explain (analyze, verbose) select * from departments;
+
+
+3. Или импортируем FOREIGN SCHEMA
+
+IMPORT FOREIGN SCHEMA public
+FROM SERVER fdw_centos
+INTO external_schema;
+
+FOREIGN TABLE и FOREIGN SCHEMA - хранятся только на удалённом сервере
+
+
+-------------------------
+
+sharding
+
+сначала:
+1.Создание таблиц с секционированием partitioning (см.выше)
+2.настройка FWD (см.выше)
+
+и далее:
+
+на удалённоом сервере создаём:
+
+CREATE TABLE temperature_201904 (
+  id BIGSERIAL NOT NULL,
+  city_id INT NOT NULL,
+  timestamp TIMESTAMP NOT NULL,
+  temp DECIMAL(5,2) NOT NULL
+);
+
+на локальноом сервере FOREIGN TABLE:
+
+CREATE FOREIGN TABLE sharding_schema.temperature_201904 PARTITION OF temperature
+    FOR VALUES FROM ('2019-04-01') TO ('2019-05-01')
+    SERVER fdw_centos;
+
+Insert INTO public.temperature(
+	city_id, "timestamp", temp)
+	values (1, '2019-02-25 07:19:15.23456+10', -20);
+
+-----------------
+
+#Нужно применить к таблице PARTITION BY RANGE (department_id);
+#Сначала бы нужно переименовать employees в employees_old, 
+ALTER TABLE employees RENAME TO employees_old;
+#и потом клонировать employees_old в employees, но в дальнейшем всё равно вылазит много косяков
+#Поэтому для обучения, не переименовываю employees, и клонирую employees1 
+
+#Так не получается клонировать, т.к. есть зависимость в employees(department_id  INTEGER REFERENCES departments(department_id)):
+CREATE TABLE employees1 (LIKE employees INCLUDING ALL) PARTITION BY RANGE (department_id);
+		#Вылазит ошибка:
+		#	ERROR:  unique constraint on partitioned table must include all partitioning columns
+		#	DETAIL:  PRIMARY KEY constraint on table "employees1" lacks column "department_id" which is part of the partition key.
+		
+#Так получается:
+CREATE TABLE employees1 (LIKE employees) PARTITION BY RANGE (department_id);
+
+# Делаем партиционирование (наверно можно что-то вместо FOR VALUES FROM (...) TO (...), поэтому пока костыль):
+CREATE TABLE employees1_after_80 PARTITION OF employees1 FOR VALUES FROM (81) TO (111);	
+CREATE TABLE employees1_before_80 PARTITION OF employees1 FOR VALUES FROM (0) TO (79);
+
+# А теперь шардирование 
+# Сначала регистрируем внешний источник данных (см. выше):
+CREATE FOREIGN TABLE employees1_department_id_80 PARTITION OF employees
+    FOR VALUES FROM (79) TO (81)
+    SERVER fdw_centos;
+
+# Ещё на удалённом сервере нужно создать employees1_80 куда шардируем:
+CREATE TABLE IF NOT EXISTS public.employees1_80
+(
+    employee_id integer,
+    first_name character varying(20) COLLATE pg_catalog."default",
+    last_name character varying(25) COLLATE pg_catalog."default" NOT NULL,
+    email character varying(25) COLLATE pg_catalog."default" NOT NULL,
+    phone_number character varying(20) COLLATE pg_catalog."default",
+    hire_date timestamp without time zone NOT NULL,
+    job_id character varying(10) COLLATE pg_catalog."default" NOT NULL,
+    salary numeric(8,2),
+    commission_pct numeric(2,2),
+    manager_id integer,
+    department_id integer
+)
+
+# Перегоняем данные.
+# Так не работает есть строка, где department_id is Null
+INSERT INTO employees1 SELECT * FROM employees; 
+
+# Приходится так, но строку с Null потеряли (очень плохо, т.к. не понятно как партиционировать department_id с Null):
+INSERT INTO employees1 SELECT * FROM employees where department_id is not Null;
+
+# Проверяем, аналигируем:
+explain (analyze, verbose, costs, SETTINGS, buffers, wal, timing) 
+select * from employees1 where department_id = 80;
+
+explain (analyze, verbose, costs, SETTINGS, buffers, wal, timing) 
+select * from employees1 where department_id != 80;
+
+# Шардировать и партиционировать имеющуюся таблицу возможно не всегда!
+-------------------
+-------------------
+
+select * from pgstatindex('индекс')
+select * from pgstatindex('cust_pkey')
+
+параметр avg_leaf_density  - средняя плотность лучше ближе к 90
+
+select * from pg_stat_user_tables;
+
+Переиндексация:
+reindex index <название индекса>
+reindex table <название таблицы>
+
+утилита reindexdb
+reindex -d 'имя бд'
+reindex -a
+-----------------
+
+AUTOVACUUM: настраивается в postgresql.conf
+
+select * from pg_stats
+	параметр:
+		avg-width - Средний размер элементов в столбце, в байтах
+		n_distincts - количество уникальных значений.
+
+select * from pg_stat_user_tables
+
+Утилита vacuumdb:
+vacuumdb -f -v -d DBNAME
+
+или через SQL запрос
+vacuum full verbose cust
+
+или через ПКМ -> Maintenance
+
+=================
+
+Настраиваются планы оптимизации запросов
+
+QUERY TUNING: настраивается в postgresql.conf
+
+через SQL запросы:
+set enable_hashjoin = ''
+set enable_nestloop = ''
+set enable_seqscan = ''
+
+----------------
+
+REPORTING AND LOGGING: настраивается в postgresql.conf
+
+Для записи логов в формате csv с сохранением SELECT запросов:
+log_destination = 'csvlog'
+log_statement = 'all'
+
+
+=====================
+
+PL/PGSQL - 
+https://www.postgresqltutorial.com/postgresql-plpgsql/
+
+Блочная архитектура функции PL/PGSQL:
+
+1. Анонимный блок:
+do $$
+...			|
+declare   	| необязательные
+...			|
+begin
+	raise info 'hello, world!';
+end
+$$
+
+2. Функция:
+create function hello()
+   returns void
+   language plpgsql
+  as
+$$
+begin
+	raise notice 'hello, world!';
+end;
+$$
+
+create or replace function my_function01(empid int)
+   returns text
+   language plpgsql
+  as
+$$
+declare
+result text;
+lname text;
+fname text;
+begin
+	select first_name, last_name into fname, lname from employees
+	where employee_id = empid;
+	result = fname || ' ' || lname;
+	return result;
+end;
+$$
+
+вызов функции
+select  * from my_function01(107);
+select my_function01(107);
+
+Присвоение типа переменной брать из таблицы:
+first_name employees.first_mane%type := 'John'
+
+#Брать все типы переменных из таблицы:
+do $$
+declare
+	emp_var employees%rowtype
+begin
+	emp_var.employee_id = 100;
+	emp.var.first_name = 'James';
+	emp_var.last_name = 'Bond';
+	emp.var.salary = 20.5;
+	raise notice
+		....
+end
+$$
+
+# Обьявление переменных их таблицы (rec)
+do  &&
+declare	
+	rec record;
+	employee_id int = 100;
+begin
+	select  * into rec from employees where 
+	raise
+		..rec..
+		....
+end
+$$
+
+# Обьявление константы
+dollar_rate constant numeric(10,2) = 70
+
+
+
+create function get_department_id(emp_id bigint)
+   returns text
+   language plpgsql
+  as
+$$
+declare
+	rec record;
+result text;
+begin
+	select department_id into rec from employees where employee_id = emp_id;
+	return rec.department_id;
+end;
+$$
+
+create function get_dept_name (emp_id bigint)
+returns 
+	varchar(300)
+language plpgsql
+as
+$$
+declare
+	rec record;
+begin
+	select d.* into rec 
+	from 
+		public.employees e
+		inner join public.departments d on d.department_id = e.department_id;
+	return rec.department_name;
+end;
+$$;
+
+
+
+	if score = 1 then
+		result_var = 'весьма неудовлетворительно';
+	elseif score = 2 then
+		result_var = 'неудовлетворительно';
+	...
+	else
+		result_var = 'неизвестно'
+	
+	case score
+		when 1 then result_var = 'весьма неудовлетворительно';
+		when 2 then result_var = 'неудовлетворительно';
+		...
+
+#циклы:
+create function dep (emp_id bigint)
+returns void;
+language plpgsql
+as
+$$
+declare
+counter int;
+begin
+	counter = 0;	
+	loop
+		raise info '%';
+		counter = counter + 1;
+		if counter > var1 then
+			exit;
+		end if;
+	end loop;
+end;
+$$;
+
+
+while counter <5 loop
+	...
+end loop;
+
+
+for counter in 1..5 loop
+	...
+end loop;
+
+
+for f in select ...
+	loop	
+		...
+	end loop;
+
+#Что-то недопилено, ругается на function dep(record) does not exist
+create or replace function raise_salary()
+returns 
+	void
+language plpgsql
+as
+$$
+declare
+    f record;
+	const_depname varchar(100);
+begin
+const_depname = 'IT';
+for f in select employee_id from employees order by employee_id desc
+	loop	
+		if (select * from dep (f)) = 'IT' then 
+			UPDATE employees SET salary = salary * 1.2 where employee_id = f;
+		else
+			UPDATE employees SET salary = salary * 1.1 where employee_id = f;
+		end if;
+	end loop;
+end;
+$$
+
+create or replace function raise_salary()
+   returns void
+   language plpgsql
+as
+$$
+declare 
+	rec record;
+	var_salary employees.salary%type;
+	
+begin
+	for rec in select * from employees 
+				join departments on employees.department_id = departments.department_id
+	loop
+		var_salary = rec.salary;
+		if rec.department_name = 'IT' then
+			var_salary = var_salary * 1.2;
+		else
+			var_salary = var_salary = 1.1;
+		end if;
+		
+		update employees 
+		set salary = var_salary 
+		where employee_id = rec.employee_id;
+
+	end loop;
+end;
+$$;
+
+
+	
+exit when ....
+continue when ...
+
+
+----------------------
+
+Установка дебаггера
+yum search pldebugger
+yum install pldebugger_14
+
+И в pgAdmin создаём Extensions: pldebugger
+В postgresql.conf: shared_preload_libraries = 'plugin_debugger'
+
+Теперь ПКМ на функции -> debugging
+
+
+Блок исключений ошибок:
+
+exception when division_by_zero then
+	raise info 'Делить на ноль не хорошо'
+return 0;
+exception when others then
+	raise info 'Возникла неизвестная ошибка'
+return 0;
+
+Генерируем ошибку
+raise exception "Делаю ошибку'
+
+Можно в код сделать вложенный код begin ...end;
+
+Для вывода служебной информации при появлении ошибки:
+get stacked diagnostics
+...
+raise notice
+...
+
+
+#Курсоры - набор записей по которому можно пройтись (отлично заменяються на циклы)
+#обьявление
+cur_film cursor(p_year integer)
+# Вызов курсора
+fetch cur_films into rec_films;
+
+create or replace function1 (out param int)
+
+#Перегрузка функций 
+
+Оконные функции (например RANK, IMMUTABLE, STABLE, VOLATILE, LEAKPROOF
+SECURITY INVOKER, SECURITY DEFINER)
+----------------
+
+# Процедуры  (сейчас не используются)
+#Создание процедур
+create procedure(..)...
+#Вызов процедур
+call procedure()
+---------------------
+#Триггеры - специальный объект в БД, вызываемый при определённых условии (в основном как костыли)
+#Триггерная функция
+create function	trigger_f()
+	return trigger
+	....
+
+#Триггер
+create trigger last_name_changes
+	before insert or update or delete     # или after, unstead
+	....
+	
+before - это для аудита, вывода сообщений о изменениях (протоколирование в лог)
+
+--------------------
+Пакеты для написания кода внутри функций Postgres на python и java
+pl/java
+pl/python
+
+#Ставим pl/python
+yum search plpython
+yum install postgresql14-plpython3
++ Добавляем Extension plpython3u
+Теперь можем делать функции используя python
+
+Аналогично с pl/java
+yum search pljava
+...и т.д.
+
+-----
+
+primary_conninfo = 'user=postgres passfile=''/var/lib/pgsql/.pgpass'' channel_binding=prefer port=5432 sslmode=prefer sslcompression=0 sslsni=1 ssl_min_protocol_version=TLSv1.2 gssencmode=prefer krbsrvname=postgres target_session_attrs=any'
+
+primary_conninfo = 'host=192.168.115.133 port=5432 user=postgres password=password'
+
+На слейве
+pg_basebackup -h 192.168.115.133 -U postgres -D /var/lib/pgsql/14/baserep -R
+
+
+/usr/pgsql-14/bin/pg_ctl promote
+
+#Инструкция по настройке встроенной в postgres репликации:
+https://www.percona.com/blog/2018/09/07/setting-up-streaming-replication-postgresql/
+
+
+-------------
+#Инструкция patroni + etcd + haproxy (настройка кластера с нуля!):
+https://www.techsupportpk.com/2020/02/how-to-create-highly-available-postgresql-cluster-centos-rhel-8.html
+
+--------------
+Настройка Postgres для аутентификации через LDAP
+https://www.strongdm.com/blog/connecting-postgres-to-active-directory-for-authentication
+------------
+
+Юр. документы:
+ - SLA: основной регламент
+ - PAU AUP: Acceptable Use Policy
+Тех. документы:
+	1) system docs
+	2) DRP - Disaster Recovery Plan
+	3) System incidents log
+
+Daily:
+	- посмотр журналов событий / журналов резервного копирования
+	- беглый осмотр системных ресурсов
+	- просмотр текущих подключений
+	- резервное копирование в соответствии с расписанием
+	- очистка старых WAL из архивного каталога
+Periodic:
+	- просмотр критических обновлений безопасности для Postgres/OS
+	- анализ тенденций по производительности/загрузке ресурсов
+	- fire alerts - пробные восстановления
+	- анализ жизненных циклов используемого ПО, инициация перехода на новые версии
+	- анализ наличия устаревших данных (obsolete data)
+	- проверка BIOS на серверах на предмет необходимости обновления
+	- проверки действия при сбоях электропитания
+	- аудит разрешений
+	
+	

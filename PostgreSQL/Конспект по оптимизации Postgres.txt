@@ -1,0 +1,54 @@
+establishing performance baseline
+workload performance measurements
+performance bottlenecks
+
+Оценка:
+1) Смотрим счетчики ОС
+	- процессор
+	- память
+	- жесткий диск
+	- сеть
+
+Процессор/total processor time
+	<=80 %
+Отключение распаралелливания
+max_parallel_workers_per_gather
+
+Память: free не менее 10 процентов
+blks_hit
+shared_buffers
+
+Диск: длина очереди (не более 2 в среднем за приличное время), IOSTAT
+
+Сеть: длина очереди (не более 2),
+tc -s -d qdisc ls dev eth0
+
+2) смотрим представления pg_catalog.pg_stat*
+(с возможностью добавить дополнительные, например, pg_stat_statements)
+
+Бенчмарк: pgbench
+
+Чеклист оптимизации:
+
+0) архитектура
+
+1) проверка подключений
+ - проверка драйверов
+ - применение connection pooling
+ - MARS
+
+2) индексы
+
+3) partioning/sharding
+	1) На Win создаем employees c параметром PARTITION BY
+	2) На CentOS создаем таблицу emp80 с такой же структурой
+	3) на Win сервере командой CREATE FOREIGN TABLE ... Partition OF создаем ссылку для диапазона с департаментом 80 на таблицу emp80 на Centos
+
+4) фрагментация/вакуумирование
+
+5) статистика/оптимизация запросов
+
+протоколирование запросов
+
+6) параметры конфигурации
+

@@ -1,0 +1,18 @@
+
+http://reporting-services.ru/tmp/postgresbooks1.zip
+
+
+http://reporting-services.ru/tmp/2021-11-22.zip
+http://reporting-services.ru/tmp/2021-11-23.zip
+http://reporting-services.ru/tmp/2021-11-24.zip
+http://reporting-services.ru/tmp/2021-11-25.zip
+http://reporting-services.ru/tmp/2021-11-26.zip
+
+Настройка Postgres для аутентификации через LDAP
+https://www.strongdm.com/blog/connecting-postgres-to-active-directory-for-authentication
+
+
+Инструкция настройка patroni + etcd + haproxy (настройка кластера с нуля!):
+https://www.techsupportpk.com/2020/02/how-to-create-highly-available-postgresql-cluster-centos-rhel-8.html
+
+Ростислав Михеев: rostislavm@askit.ru
