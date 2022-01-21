@@ -1,0 +1,140 @@
+#Обновляем
+yum update
+yum upgrade
+
+#Настраиваем python
+python --version
+
+yum search python
+yum install python39
+
+#Если версия python=2 и/или есть python3 --version
+update-alternatives --install /usr/bin/python python /usr/bin/python3 2
+alternatives --config python 
+yum install git python3-pip
+update-alternatives --install /usr/bin/pip pip /usr/bin/pip3 2
+update-alternatives --install /usr/bin/pydoc pydoc /usr/bin/pydoc3 2
+
+#Ставим ansible
+pip3 install ansible
+ansible --version
+#ansible 2.9.9 и выше
+# но отсутствует ansible.cfg
+
+#создание config file
+vi ansible.cfg
+------------------ в файле
+inventory = /root/ansible/hosts
+host_key_ckecking = false
+------------------ в файле
+
+Создаём inventory:
+[root@ansible /]# mkdir ansible
+[root@ansible /]# cd ansible/
+[root@ansible ansible]# touch hosts
+[root@ansible ansible]#vi hosts
+------------------ в файле
+wildfly1 ansible_host=192.168.115.136 ansible_user=root ansible_password=password
+wildfly2 ansible_host=192.168.115.137 ansible_user=wfadmin ansible_ssh_private_key_file=/root/.ssh/client02
+------------------ в файле
+
+#Запускаем пинг:
+cd ~
+ansible all -m ping
+
+-----ошибка
+wildfly1 | FAILED! => {
+    "msg": "to use the 'ssh' connection type with passwords or pkcs11_provider, you must install the sshpass program"
+}
+-----ошибка
+
+#Ставим sshpass:
+dnf makecache
+dnf install epel-release -y
+dnf makecache
+dnf install sshpass -y
+
+#Запускаем пинг:
+cd ~
+ansible all -m ping
+
+----------пинг Работает!
+wildfly1 | SUCCESS => {
+    "ansible_facts": {
+        "discovered_interpreter_python": "/usr/libexec/platform-python"
+    },
+    "changed": false,
+    "ping": "pong"
+}
+----------пинг Работает!
+
+
+
+#Ещё команды:
+ansible all -m setup  							#вся возможная информация об узле/узлах
+ansible all -m shell -a "uptime"				#Использование shell/bash для запроса информации с узла (здесь информация о времени запуске/работы ВМ)
+ansible all -m command -a "uptime"				#то же самое
+
+ansible all -m shell -a "hostname" 				#Имя хоста локальное
+ansible all -m shell -a "sudo -l && hostname"				#Права пользователя
+ansible all -m shell -a "sudo -l -U wildfly"	#Права пользователя wildfly
+
+ansible all -m file -a "path=/root/ansible-file.txt state=touch" -b	#СОздание файла
+
+
+#Группы в inventory (hosts)
+[group1] 			 #Просто группа хостов
+wildfly1 ...
+wildfly2 ...
+
+[big_group1:children] #Родительская группа для нескольких группу
+group1
+group2
+
+
+#Вынос переменных
+touch group1
+vi group1
+-----файл
+ansible_host: 192.168.115.136
+ansible_user: root
+ansible_password: password
+----файл
+в файле hosts - удаляем ненужные переменные
+
+запуск inventory из любого другого каталога:
+ansible all -i /root/ansible/hosts -m ping
+
+#Создаём плэйбук
+touch requestinfo.yml
+vi requestinfo.yml
+
+-----файл
+
+- name: Ping Servers
+  hosts: all
+  become: yes
+
+  tasks:
+
+  - name: Task ping
+    ping:
+
+  - name: Get hostname
+    shell: hostname
+    register: gethostname
+  - debug: msg="{{ gethostname.stdout }}"
+
+  - name: Get sudo rights
+    shell: sudo -l
+    register: getsudorights
+  - debug: msg="{{ getsudorights.stdout }}"
+  
+-----файл
+
+#Запускаем плэйбук (можно и абсольтные\относительные пути до файлов inventory и playbook)
+ansible-playbook -i hosts requestinfo.yml
+
+
+Узнать бы ещё как запускать плэйпук с заволтованными паролями
+
