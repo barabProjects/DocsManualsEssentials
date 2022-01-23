@@ -2,6 +2,9 @@
 yum update
 yum upgrade
 
+#Задать локальное имя хоста:
+hostnamectl set-hostname ansible.local
+
 #Настраиваем python
 python --version
 
@@ -22,10 +25,11 @@ ansible --version
 # но отсутствует ansible.cfg
 
 #создание config file
-vi ansible.cfg
+vi .ansible.cfg
 ------------------ в файле
 inventory = /root/ansible/hosts
 host_key_ckecking = false
+log_path= /root/logs/ansible-log.log
 ------------------ в файле
 
 Создаём inventory:
@@ -38,9 +42,14 @@ wildfly1 ansible_host=192.168.115.136 ansible_user=root ansible_password=passwor
 wildfly2 ansible_host=192.168.115.137 ansible_user=wfadmin ansible_ssh_private_key_file=/root/.ssh/client02
 ------------------ в файле
 
+
+На ВМ создаём пользователей: useradd -m -s /bin/bash wfadmin
+
 #Запускаем пинг:
 cd ~
 ansible all -m ping
+
+ansible all -m ping -vvvv	#Смотрим дебаги выполнения команд
 
 -----ошибка
 wildfly1 | FAILED! => {
@@ -68,10 +77,24 @@ wildfly1 | SUCCESS => {
 }
 ----------пинг Работает!
 
+--Если ошибка---
+wildfly2 | FAILED! => {
+    "msg": "Using a SSH password instead of a key is not possible because Host Key checking is enabled and sshpass does not support this.  Please add this host's fingerprint to your known_hosts file to manage this host."
+}
+--Если ошибка---
+Если зайти на хост по ssh от запросит закачку ssh ключа,
+и запускаем ansible all -m ping повторно - успех!
 
 
 #Ещё команды:
+ansible-inventory --list						#Смотрим inventory
+ansible-inventory -i hosts --list -y			# - в yaml формате
+ansible-inventory -i hosts --graph				# - в виде дерева
+ansible-inventory -i hosts --list --toml		# - в toml формате (похож на формат inventory)
+
 ansible all -m setup  							#вся возможная информация об узле/узлах
+ansible all -m debug -a "var=ansible-host"		#
+
 ansible all -m shell -a "uptime"				#Использование shell/bash для запроса информации с узла (здесь информация о времени запуске/работы ВМ)
 ansible all -m command -a "uptime"				#то же самое
 
@@ -79,7 +102,7 @@ ansible all -m shell -a "hostname" 				#Имя хоста локальное
 ansible all -m shell -a "sudo -l && hostname"				#Права пользователя
 ansible all -m shell -a "sudo -l -U wildfly"	#Права пользователя wildfly
 
-ansible all -m file -a "path=/root/ansible-file.txt state=touch" -b	#СОздание файла
+ansible all -m file -a "path=/root/ansible-file.txt state=touch" -b	#Создание файла
 
 
 #Группы в inventory (hosts)
@@ -93,12 +116,15 @@ group2
 
 
 #Вынос переменных
-touch group1
+mkdir group_vars #Директория с переменными
+cd group_vars
+
+touch group1 #Файл с переменными
 vi group1
 -----файл
 ansible_host: 192.168.115.136
 ansible_user: root
-ansible_password: password
+ansible_password: password	#Если есть спецсимволы, то экранируем кавычками "  "
 ----файл
 в файле hosts - удаляем ненужные переменные
 
@@ -126,15 +152,73 @@ vi requestinfo.yml
   - debug: msg="{{ gethostname.stdout }}"
 
   - name: Get sudo rights
-    shell: sudo -l
+    shell: sudo -l				# Попробовать с "| grep" или "cat /etc/sudoers | grep wildfly"
     register: getsudorights
-  - debug: msg="{{ getsudorights.stdout }}"
+  - debug: msg="{{ getsudorights.stdout_lines }}"  # Можно выкатить какой-либо элемент из списка, например последний stdout_lines[-1]
   
 -----файл
 
 #Запускаем плэйбук (можно и абсольтные\относительные пути до файлов inventory и playbook)
 ansible-playbook -i hosts requestinfo.yml
 
+ansible-playbook requestinfo.yml --limit group1  	# Опрашиваем определённую группу/узел
+ansible-playbook requestinfo.yml --limit wildfly1,wildfly2 # Опрашиваем несколько определённых групп/узлов
+ansible-playbook -i hosts requestinfo.yml --limit group1	#Опрашиваем определённую группу group1 или узел из файла hosts
 
 Узнать бы ещё как запускать плэйпук с заволтованными паролями
+ansible-vault
+https://itsecforu.ru/2019/08/26/%F0%9F%92%BD-%D1%88%D0%BF%D0%B0%D1%80%D0%B3%D0%B0%D0%BB%D0%BA%D0%B0-ansible-vault-%D1%81%D0%BF%D1%80%D0%B0%D0%B2%D0%BE%D1%87%D0%BD%D0%BE%D0%B5-%D1%80%D1%83%D0%BA%D0%BE%D0%B2%D0%BE%D0%B4%D1%81%D1%82/
+--------
+ansible-vault create create_users.yml		#создание зашифрованного файла (сначала запрашивает создание vault-пароля)
+
+ansible-vault encrypt passwords.txt			#Шифрование файла
+ansible-vault edit passwords.yml			#редактирование зашифрованного файла
+
+ansible-vault rekey create_users.ym			#редактирование пароля шифрования
+
+ansible-vault view create_users.yml			#просмотр зашифрованного файла
+ansible-vault decrypt myfile.yml			#расшифровка файла
+ansible-playbook --ask-vault-pass <vault-encrypted-playbook-file>.yaml	#Запуск зашифрованного playbook
+
+------------------------
+https://tproger.ru/translations/ansible-how-to-use/
+Как использовать Ansible-Vault
+
+Создайте секретный файл хранилища, содержащий ключ шифрования, который шифрует ваши переменные.
+
+touch .vault_pass.txt
+echo 'YOUR_CONFIG_PASS' > .vault_pass.txt
+
+Чтобы зашифровать переменные, используйте:
+
+ansible-vault encrypt group_vars/vars.yml --vault-password-file .vault_pass.txt
+
+Чтобы расшифровать переменные, используйте:
+
+ansible-vault decrypt group_vars/vars.yml --vault-password-file .vault_pass.txt
+
+--------------------
+https://evgen.me/ansible-xranenie-zashifrovannyx-parolej-v-peremennyx/
+
+
+--------------
+
+Создание ролей
+mkdir roles
+cd roles
+ansible-galaxy init <Имя роли> # создаётся пустая роль 
+	Туда распихиваются ansible-playbookи, а в самом playbook - roles с параметрами
+
+
+-----------------
+
+Зашифровать строчку:
+ansible-vault encrypt-string
+ansible-vault encrypt-string --stdin-name "Mypassword" 
+
+Вставляем в переменную с паролем в playbook или inventory
+Теперь запускаем джобы в ansible с переменными --ask-vault-pass или --vault-password-file .vault_pass.txt
+
+
+
 

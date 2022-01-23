@@ -1,0 +1,25 @@
+- name: Ping Servers
+  hosts: all
+  become: yes
+
+  tasks:
+
+  - name: Task ping
+    ping:
+
+  - name: Get hostname
+    shell: hostname
+    register: gethostname
+  - debug: msg="{{ gethostname.stdout }}"
+
+  - name: Get sudo rights for current user
+    shell: sudo -l
+    register: getsudorights
+  - debug: 
+      msg: "{{ getsudorights.stdout_lines }}"
+
+  - name: Get sudo rights for wfadmin
+    shell: sudo -l -U wfadmin
+    register: getsudorights
+  - debug: var=getsudorights.stdout_lines
+

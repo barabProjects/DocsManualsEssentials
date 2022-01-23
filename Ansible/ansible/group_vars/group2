@@ -1,0 +1,7 @@
+
+---
+ansible_host: 192.168.115.137
+ansible_user: root
+# ansible_password: "[f,fhjdcr4212"
+ansible_password: "{{ Mypassword }}"
+dev: chel2

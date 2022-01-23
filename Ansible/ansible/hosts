@@ -1,0 +1,12 @@
+[group1]
+wildfly1 ansible_host=192.168.115.136 ansible_user=root ansible_ssh_pass="{{ Mypassword }}"
+
+[group1:vars]
+dev=chel1
+
+[group2]
+wildfly2
+
+[two_groups:children]
+group1
+group2
