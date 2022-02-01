@@ -155,6 +155,7 @@ vi requestinfo.yml
     shell: sudo -l				# Попробовать с "| grep" или "cat /etc/sudoers | grep wildfly"
     register: getsudorights
   - debug: msg="{{ getsudorights.stdout_lines }}"  # Можно выкатить какой-либо элемент из списка, например последний stdout_lines[-1]
+
   
 -----файл
 
@@ -179,6 +180,10 @@ ansible-vault rekey create_users.ym			#редактирование пароля
 ansible-vault view create_users.yml			#просмотр зашифрованного файла
 ansible-vault decrypt myfile.yml			#расшифровка файла
 ansible-playbook --ask-vault-pass <vault-encrypted-playbook-file>.yaml	#Запуск зашифрованного playbook
+
+#Так точно работает, если шифрованные пароли хранятся в /group_vars/all/main.yml
+ansible-playbook -i inventory/hosts playbooks/requestinfo.yml --limit wildfly2,wildfly1 --ask-vault-pass
+ansible-playbook -i inventory/hosts playbooks/requestinfo.yml --limit wildfly2,wildfly1 --vault-password-file .vault_pass.txt	# Пароль роль от разволтовки брать из .vault_pass.txt
 
 ------------------------
 https://tproger.ru/translations/ansible-how-to-use/

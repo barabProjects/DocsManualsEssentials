@@ -1,0 +1,21 @@
+- name: Get info from servers
+  hosts: all
+  become: yes
+
+  tasks:
+
+  - name: Get hostname
+    shell: hostname
+    register: gethostname
+
+  - name: Get sudo rights
+    shell: sudo -l
+    register: getsudorights
+  
+  - name: Print result
+    ansible.builtin.debug:	#Начало вывода на экран
+    #debug:			#Начало вывода на экран, так тоже работает 
+      msg:
+      - "Hostname: {{ gethostname.stdout }}"
+      - "Информация о правах sudo:"
+      - "{{ getsudorights.stdout_lines }}"

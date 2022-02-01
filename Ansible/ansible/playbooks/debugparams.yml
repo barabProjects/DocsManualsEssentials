@@ -1,0 +1,16 @@
+- name: inspect inventory
+  hosts: all
+  become: no
+  gather_facts: no	# Отключить проверку доступности узлов
+
+  tasks:
+  
+  - name: Params from inventory
+    debug:
+      msg:
+      - "Имя в inventory: {{ inventory_hostname }}"
+      - "Имя узла: {{ ansible_host }}"
+      - "Логин : {{ ansible_user }}"		# То же самое с "{{ ansible_user }}"
+      - "Пароль: {{ ansible_ssh_pass }}"	# То же самое с "{{ ansible_password }}"
+      - "{{ dev }}"
+      - "{{ common_var }}"
