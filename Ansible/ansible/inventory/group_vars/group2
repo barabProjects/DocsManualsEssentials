@@ -1,7 +1,9 @@
 
 ---
 ansible_host: 192.168.115.137
-ansible_user: root
+#ansible_user: root
+ansible_user: wfadmin
 # ansible_password: "[f,fhjdcr4212"
-ansible_password: "{{ Mypassword }}"
+# ansible_password: "{{ rootPassword }}"
+ansible_password: "{{ wfadminPassword }}"
 dev: chel2

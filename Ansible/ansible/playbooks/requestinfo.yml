@@ -1,21 +1,39 @@
 - name: Get info from servers
   hosts: all
-  become: yes
+  become: no		#Зайти с правами sudo - откл
+  gather_facts: yes	#Проверка доступности
 
   tasks:
 
   - name: Get hostname
     shell: hostname
     register: gethostname
+    
+  - name: Get uptime
+    shell: uptime
+    register: getuptime
 
   - name: Get sudo rights
     shell: sudo -l
     register: getsudorights
+    
+  - name: find wildfly
+    shell: systemctl | egrep "wildfly|wfapp"
+    register: findwf
+    
+  - name: Get wildfly status
+    shell: sudo systemctl status wildfly
+    register: getwfstatus
   
   - name: Print result
     ansible.builtin.debug:	#Начало вывода на экран
     #debug:			#Начало вывода на экран, так тоже работает 
       msg:
       - "Hostname: {{ gethostname.stdout }}"
+      - "Uptime: {{ getuptime.stdout }}"
       - "Информация о правах sudo:"
       - "{{ getsudorights.stdout_lines }}"
+      - "Найдены службы флая:"
+      - "{{ findwf.stdout_lines }}"
+      - "Состояние СП Wildfly:"
+      - "{{ getwfstatus.stdout_lines }}"
