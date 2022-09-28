@@ -218,8 +218,8 @@ ansible-galaxy init <Имя роли> # создаётся пустая роль
 -----------------
 
 Зашифровать строчку:
-ansible-vault encrypt-string
-ansible-vault encrypt-string --stdin-name "Mypassword" 
+ansible-vault encrypt_string
+ansible-vault encrypt_string --stdin-name "Mypassword"
 
 Вставляем в переменную с паролем в playbook или inventory
 Теперь запускаем джобы в ansible с переменными --ask-vault-pass или --vault-password-file .vault_pass.txt
